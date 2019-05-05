@@ -1,3 +1,4 @@
+import math
 import operator
 from collections import Counter
 import statistics
@@ -100,6 +101,27 @@ class Dist:
             cum_c += c
             buckets.append((v, cum_c))
         return Dist(buckets)
+
+    def to_rcdf(self):
+        norm = self.normalize()
+        buckets = []
+        cum_c = 0
+        for v, c in reversed(norm._buckets):
+            cum_c += c
+            buckets.append((v, cum_c))
+        return Dist(buckets)
+
+    def round_down(self):
+        combined = Counter()
+        for (v1, c1) in self._buckets:
+            combined[math.floor(v1)] += c1
+        return Dist(combined.items())
+
+    def round_up(self):
+        combined = Counter()
+        for (v1, c1) in self._buckets:
+            combined[math.ceil(v1)] += c1
+        return Dist(combined.items())
 
     def pass_fail(self, threshold, pass_val=1, fail_val=0):
         count_pass = sum(c for v, c in self._buckets if v >= threshold)
