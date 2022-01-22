@@ -5,6 +5,11 @@ from enum import Enum, unique
 import inspect
 import sys
 
+debug = False
+def debug_log(*args, **kwargs):
+    if debug:
+        print(*args, **kwargs)
+
 @unique
 class MoveType(Enum):
     T = "Treads"
@@ -491,6 +496,7 @@ class Unit:
         co_defense = self.co.defense_for(self, (self.power or DEFENDER_POWER), attacker)
         terrain_defense = self.displayed_hp.scale(self.terrain.defense)
         total_defense = co_defense + terrain_defense
+        debug_log("total defense:", total_defense)
         return total_defense
 
     def base_damage_to(self, other):
@@ -499,16 +505,24 @@ class Unit:
         return DAMAGE_MATRIX[my_index][other_index]
 
     def damage_to(self, other):
+        debug_log("damage to:", other)
+
         base_damage = Dist.exactly(self.base_damage_to(other))
+        debug_log("base damage:", repr(base_damage))
         co_attack = self.co.attack_for(self, (self.power or ATTACKER_POWER), other)
+        debug_log("co attack:", repr(co_attack))
 
         co_adjusted_damage = (base_damage.scale(co_attack / 100)) + self.co.luck
         hp_adjusted_damage = (self.displayed_hp.clamp(range(10)) / 10) * co_adjusted_damage
+        debug_log("adjusted damage", repr(hp_adjusted_damage))
 
         defense_multiplier = other.defense_rating(self).transform(lambda v: (200 - v) / 100)
+        debug_log("defense multiplier:", repr(defense_multiplier))
 
         raw_damage = hp_adjusted_damage * defense_multiplier
+        debug_log("raw damage:", repr(raw_damage))
         final_damage = raw_damage.round_awars()
+        debug_log("final damage:", repr(final_damage))
 
         return final_damage
 
@@ -517,9 +531,17 @@ class Unit:
             return self
         other, *remaining = args
 
-        damage = other.damage_to(self)
-        new_raw_hp = self.raw_hp - damage
-        return self.with_hp(new_raw_hp).attack_with(*remaining)
+        total_new_raw_hp = Dist([])
+        for displayed_hp, chance in self.displayed_hp.normalize()._buckets:
+            partial_self = self.truncate_hp(displayed_hp)
+            damage = other.damage_to(partial_self)
+            new_raw_hp = partial_self.raw_hp - damage
+            debug_log("displayed hp", displayed_hp, "has new raw hp:", repr(new_raw_hp))
+            total_new_raw_hp = total_new_raw_hp.vector_add(new_raw_hp)
+            debug_log("total raw hp is now:", repr(total_new_raw_hp))
+            debug_log()
+
+        return self.with_hp(total_new_raw_hp).attack_with(*remaining)
     attack_With = attack_with
 
 

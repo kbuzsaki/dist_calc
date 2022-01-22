@@ -148,6 +148,13 @@ class Dist:
         else:
             return Dist([(v * other, c) for v, c in self._buckets])
 
+    def vector_add(self, other):
+        """ Sums the two distributions directly, rather than combining probabalistically.
+
+            This is in contrast with __add__ which simulates "rolling the dice" for each distribution.
+        """
+        return Dist((Counter(dict(self._buckets)) + Counter(dict(other._buckets))).items())
+
     def __truediv__(self, other):
         if type(other) == Dist:
             raise Exception("Can't divide a distribution by another distribution!")
