@@ -38,11 +38,20 @@ class Dist:
         return Dist([(v, 1) for v in r])
 
     @staticmethod
+    def exactly(value):
+        return Dist.uniform([value])
+
+    @staticmethod
     def d(n):
         return Dist.uniform(range(1, n + 1))
 
+    @staticmethod
+    def from_lines(lines):
+        return Dist(Counter(int(float(line)) for line in lines.split()).items())
+
     def __repr__(self):
-        return "Dist(" + repr(self._buckets) + ")"
+        f = lambda v: str(v) if v == int(v) else "{:0.4f}".format(v).rstrip("0").rstrip(".")
+        return "Dist([" + ", ".join("(" + str(k) + ", " + f(v) + ")" for k, v in self._buckets) + "])"
 
     def __str__(self, c_formatters=None):
         if not c_formatters:
@@ -69,6 +78,9 @@ class Dist:
             if index < cursor:
                 return v
 
+    def values(self):
+        return [v for (v, c) in self._buckets]
+
     def _project(self, f):
         """ Projects this distribution into a new distribution by applying the
             function f to each bucket's value to find the corresponding
@@ -88,7 +100,6 @@ class Dist:
                 combined[new_val] += c1 * c2
         return Dist(combined.items())
 
-
     def __add__(self, other):
         if type(other) == Dist:
             return self._combine(other, operator.add)
@@ -96,7 +107,24 @@ class Dist:
             return Dist([(v + other, c) for v, c in self._buckets])
     __radd__ = __add__
 
+    def __sub__(self, other):
+        if type(other) == Dist:
+            return self._combine(other, operator.sub)
+        else:
+            return Dist([(v - other, c) for v, c in self._buckets])
+
+    def __rsub__(self, other):
+        if type(other) == Dist:
+            return other._combine(self, operator.sub)
+        else:
+            return Dist([(other - v, c) for v, c in self._buckets])
+
     def __mul__(self, other):
+        """ Multiplies the *buckets* of this distribution by other. Kind of.
+
+            The true purpose is to make "2d6" easy to express as "2 * d6".
+            For example, 2 * d3 = d3 + d3 = [2, 3, 4, 5, 6]
+        """
         if type(other) == int:
             output = Dist.zero()
             for i in range(other):
@@ -105,8 +133,45 @@ class Dist:
         elif type(other) == Dist:
             return self._combine(other, operator.mul)
         else:
-            raise Exception("unknown type")
+            raise Exception("unknown type: " + repr(other))
     __rmul__ = __mul__
+
+    def scale(self, other):
+        """ Multiplies the *values* of this distribution by other.
+
+            This is arguably the more natural interpretation of what "multiplication" by a number
+            should do, but it's a less common operation in D&D so it gets the more obscure name.
+            For example, d3.scale(2) = [2, 4, 6]
+        """
+        if type(other) == Dist:
+            raise Exception("Can't scale a distribution by another distribution!")
+        else:
+            return Dist([(v * other, c) for v, c in self._buckets])
+
+    def __truediv__(self, other):
+        if type(other) == Dist:
+            raise Exception("Can't divide a distribution by another distribution!")
+        else:
+            return Dist([(v / other, c) for v, c in self._buckets])
+
+    def __rtruediv__(self, other):
+        if type(other) == Dist:
+            raise Exception("Can't divide a distribution by another distribution!")
+        else:
+            return Dist([(other / v, c) for v, c in self._buckets])
+
+    def truncate(self, allowed_range):
+        return Dist([(v, c) for v, c in self._buckets if v in allowed_range])
+
+    def clamp(self, allowed_range):
+        def clamp_to_range(value):
+            if value < allowed_range.start:
+                return allowed_range.start
+            elif value > allowed_range.stop:
+                return allowed_range.stop
+            else:
+                return value
+        return self._project(clamp_to_range)
 
     def advantage(self, other=None):
         if not other:
@@ -124,8 +189,20 @@ class Dist:
     def round_up(self):
         return self._project(math.ceil)
 
+    def round_awars(self):
+        """ Advance wars rounds 0.95 and higher up, but otherwise rounds down. """
+        def awars_round(n):
+            fractional = n - math.floor(n)
+            if fractional >= 0.95:
+                return math.ceil(n)
+            return math.floor(n)
+        return self._project(awars_round)
+
     def pass_fail(self, threshold, pass_val=1, fail_val=0):
         return self._project(lambda v: pass_val if v >= threshold else fail_val)
+
+    def transform(self, f):
+        return self._project(f)
 
     def mean(self):
         total = 0
