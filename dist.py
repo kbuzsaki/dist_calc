@@ -225,10 +225,22 @@ class Dist:
         return math.sqrt(self.variance())
 
     def median(self):
-        midpoint = (len(self) - 1) / 2
-        upper_midpoint = math.ceil(midpoint)
-        lower_midpoint = math.floor(midpoint)
-        return (self[upper_midpoint] + self[lower_midpoint]) / 2
+        total_count = sum(c for _, c in self._buckets)
+        partial_count = 0
+        thresh = total_count / 2
+        min_val = None
+        # TODO: make this less janky? it's this way to handle normalized distributions
+        for v, c in self._buckets:
+            if min_val is not None:
+                max_val = v
+                break
+            partial_count += c
+            if partial_count > thresh:
+                return v
+            elif partial_count == thresh:
+                min_val = v
+                max_val = v
+        return (min_val + max_val) / 2
 
     def summary(self):
         mean = self.mean()
