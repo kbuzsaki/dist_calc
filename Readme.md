@@ -6,7 +6,11 @@ This repository has two parts:
 
 ## dist.py
 
-I wrote dist.py as a tool to help me calculate probability distributions for dice rolls in Dungeons & Dragons 5th Edition. You can use it in a python repl like so:
+I wrote dist.py as a tool to help me calculate probability distributions for dice rolls in Dungeons & Dragons 5th Edition.
+
+The core concept of the library is a `Dist` class that represents a discrete probability distribution. Concretely, each `Dist` is a set of weighted buckets, like a dictionary where each key is a possible outcome and each value is the relative likelihood of that outcome. You can then manipulate and combine the `Dist` objects to calculate the probability for specific dice rolls.
+
+You can use the library in a python repl like so:
 
 ```
 $ python -i dist.py 
@@ -39,7 +43,7 @@ You can visualize distributions and print other statistical details about them:
 14: (0.06) ######              
 15: (0.03) ###                 
 each # represents 0.01
-mean: 10.00, stdev: 2.42, median: 5.00
+mean: 10.00, stdev: 2.42, median: 10.00
 within 1 stdev (68%): 7.58 - 12.42
 within 2 stdev (95%): 5.17 - 14.83
 ```
@@ -73,7 +77,7 @@ And you can compute expected value for attacks by multiplying the to-hit distrib
 14: (0.03) #                   
 15: (0.02)                     
 each # represents 0.02
-mean: 6.00, stdev: 5.24, median: 0.00
+mean: 6.00, stdev: 5.24, median: 7.50
 within 1 stdev (68%): 0.76 - 11.24
 within 2 stdev (95%): -4.49 - 16.49
 ```
