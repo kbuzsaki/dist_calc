@@ -241,6 +241,8 @@ class Dist:
 
     def normalize(self):
         length = len(self)
+        if length == 0:
+            return self
         return Dist([(v, c / length) for v, c in self._buckets])
 
     def to_cdf(self):

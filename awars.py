@@ -142,6 +142,10 @@ class UnitType(Enum):
         return self in {UnitType.infantry, UnitType.mech}
 
     @property
+    def is_vehicle(self):
+        return self.data.move_type in {MoveType.T, MoveType.W, MoveType.P}
+
+    @property
     def is_copter(self):
         return self in {UnitType.bcopter, UnitType.tcopter}
 
@@ -273,6 +277,7 @@ class CoType(Enum):
 STANDARD_LUCK = Dist.d(10) - 1
 SONJA_LUCK = STANDARD_LUCK - STANDARD_LUCK
 NELL_LUCK = Dist.d(20) - 1
+RACHEL_LUCK = Dist.d(40) - 1
 
 STANDARD_STATS = lambda unit: (100, 100)
 STANDARD_BOOST = lambda unit: (10, 10)
@@ -355,6 +360,10 @@ def unimplemented(message):
 
 andy = CommandingOfficer(scop_boost=lambda unit: (20, 10))
 
+colin = CommandingOfficer(
+        stat_override=lambda unit: (90, 100),
+        scop_boost=lambda unit: unimplemented("Colin SCOP not implemented."))
+
 eagle = CommandingOfficer(
         stat_override=lambda unit: (115, 110) if unit.is_air else ((70, 100) if unit.is_sea else (100, 100)),
         cop_boost=lambda unit: (15, 20) if unit.is_air else (10, 10))
@@ -373,6 +382,11 @@ javier = CommandingOfficer(
         cop_boost= lambda unit, other: (10 + 10 * TOWERS, 10 + 10 * DTOWERS + (20 if other.is_indirect else 0)),
         scop_boost=lambda unit, other: (10 + 20 * TOWERS, 10 + 20 * DTOWERS + (40 if other.is_indirect else 0)))
 
+jess = CommandingOfficer(
+        stat_override=lambda unit: (110, 100) if unit.is_vehicle else (90, 100),
+        cop_boost=lambda unit: (20, 10) if unit.is_vehicle else (10, 10),
+        scop_boost=lambda unit: (40, 10) if unit.is_vehicle else (10, 10))
+
 # TODO: kanbei scop counterattacks
 kanbei = CommandingOfficer(
         stat_override=lambda unit: (130, 130),
@@ -384,6 +398,15 @@ kindle = CommandingOfficer(
         cop_boost=lambda unit: (50, 10) if unit.terrain.type.is_urban else (10, 10),
         scop_boost=lambda unit: unimplemented("kindle scop not implemented"))
 
+koal = CommandingOfficer(
+        stat_override=lambda unit: (110, 100) if unit.terrain == road else (100, 100),
+        cop_boost=lambda unit: (20, 10) if unit.terrain == road else (10, 10),
+        scop_boost=lambda unit: (30, 10) if unit.terrain == road else (10, 10))
+
+lash = CommandingOfficer(
+        stat_override=lambda unit: (100 + 10 * unit.terrain.defense, 100),
+        scop_boost=lambda unit: (10 + 10 * unit.terrain.defense, 10 + 10 * unit.terrain.defense))
+
 co_max = CommandingOfficer(
         stat_override=lambda unit: (100, 100) if unit.is_infantry else ((120, 100) if unit.is_direct else (90, 100)),
         cop_boost=lambda unit: (20, 10) if unit.is_direct and not unit.is_infantry else (10, 10),
@@ -391,6 +414,13 @@ co_max = CommandingOfficer(
 
 nell = CommandingOfficer(luck=NELL_LUCK,
         cop_boost=lambda unit: unimplemented("nell cop and scop not implemented"))
+
+rachel_luck = CommandingOfficer(luck=RACHEL_LUCK)
+
+sami = CommandingOfficer(
+        stat_override=lambda unit: (130, 100) if unit.is_infantry else ((100, 100) if unit.is_indirect else (90, 100)),
+        cop_boost=lambda unit: (30, 10) if unit.is_infantry else (10, 10),
+        scop_boost=lambda unit: (50, 10) if unit.is_infantry else (10, 10))
 
 sensei = CommandingOfficer(
         stat_override=lambda unit: (140, 100) if unit.is_infantry else ((150, 100) if unit.is_copter else (
@@ -408,7 +438,7 @@ vb = von_bolt
 
 class Unit:
 
-    def __init__(self, unit, co=CommandingOfficer(), power=None, terrain=road, raw_hp=Dist([(100, 1)])):
+    def __init__(self, unit, co=CommandingOfficer(), power=None, terrain=shoal, raw_hp=Dist([(100, 1)])):
         if isinstance(unit, UnitData):
             self.data = unit
         elif isinstance(unit, UnitType):
@@ -437,7 +467,8 @@ class Unit:
     is_air = property(lambda self: self.type.is_air)
     is_sea = property(lambda self: self.type.is_sea)
     is_infantry = property(lambda self: self.type.is_infantry)
-    is_copter = property(lambda self: self.type.is_infantry)
+    is_vehicle = property(lambda self: self.type.is_vehicle)
+    is_copter = property(lambda self: self.type.is_copter)
     is_indirect = property(lambda self: self.type.is_indirect)
     is_direct = property(lambda self: self.type.is_direct)
 
@@ -467,6 +498,10 @@ class Unit:
     def __call__(self, *args):
         ret = self
         for arg in args:
+            # Allow using the builtin max as an "alias" for the CO, since the function is not a valid argument
+            if arg == max:
+                arg = co_max
+
             if isinstance(arg, CommandingOfficer):
                 ret = ret.with_co(arg)
             elif isinstance(arg, PowerType):
