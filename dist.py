@@ -205,8 +205,8 @@ class Dist:
             return math.floor(n)
         return self._project(awars_round)
 
-    def pass_fail(self, threshold, pass_val=1, fail_val=0):
-        return self._project(lambda v: pass_val if v >= threshold else fail_val)
+    def pass_fail(self, threshold, force_fail=1, pass_val=1, fail_val=0):
+        return self._project(lambda v: pass_val if v >= threshold and v > force_fail else fail_val)
 
     def transform(self, f):
         return self._project(f)
@@ -287,13 +287,22 @@ class Dist:
         else:
             formatters = [graph_format]
 
-        return self.__str__(formatters) + "\neach # represents {:.2f}".format(cell_size)
+        return self.__str__(formatters) + "\neach # represents {:.4f}".format(cell_size)
 
     def graph(self, columns=None):
-        return self._graph(columns, extra_detail=lambda c: "({:.2f})".format(c))
+        return self._graph(columns, extra_detail=lambda c: "({:.4f})".format(c))
 
     def details(self, columns=None):
         return self.graph(columns) + "\n" + self.summary() + "\n"
+
+def details(d):
+    print(d.details())
+
+def cdf_details(d):
+    print(d.to_cdf().details())
+
+def rcdf_details(d):
+    print(d.to_rcdf().details())
 
 coin = Dist.uniform(range(2))
 d2 = Dist.d(2)
