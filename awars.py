@@ -364,12 +364,19 @@ colin = CommandingOfficer(
         stat_override=lambda unit: (90, 100),
         scop_boost=lambda unit: unimplemented("Colin SCOP not implemented."))
 
+drake = CommandingOfficer(
+        stat_override=lambda unit: (80, 100) if unit.is_air else ((100, 125) if unit.is_sea else (100, 100)))
+
 eagle = CommandingOfficer(
         stat_override=lambda unit: (115, 110) if unit.is_air else ((70, 100) if unit.is_sea else (100, 100)),
         cop_boost=lambda unit: (15, 20) if unit.is_air else (10, 10))
 
 grimm = CommandingOfficer(
         stat_override=lambda unit: (130, 80), cop_boost=lambda unit: (30, 10), scop_boost=lambda unit: (60, 10))
+
+grit = CommandingOfficer(
+        stat_override=lambda unit: (120, 100) if unit.is_indirect else ((100, 100) if unit.is_infantry else (80, 100)),
+        cop_boost=lambda unit: (30, 10) if unit.is_indirect else (10, 10))
 
 jake = CommandingOfficer(
         stat_override=lambda unit: (110, 100) if unit.terrain == plains else (100, 100),
