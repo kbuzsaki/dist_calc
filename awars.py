@@ -2,6 +2,7 @@ from dist import *
 
 from collections import namedtuple
 from enum import Enum, unique
+from itertools import permutations
 import inspect
 import sys
 
@@ -124,6 +125,21 @@ class UnitType(Enum):
     sub = 23
     tcopter = 24
     tank = 25
+
+    @property
+    def short_name(self):
+        SHORT_NAMES = {
+            UnitType.anti_air: "aa",
+            UnitType.artillery: "arti",
+            UnitType.battleship: "bship",
+            UnitType.black_boat: "bboat",
+            UnitType.black_bomb: "bbomb",
+            UnitType.infantry: "inf",
+            UnitType.md_tank: "md",
+            UnitType.mega_tank: "mega",
+            UnitType.neotank: "neo",
+        }
+        return SHORT_NAMES.get(self, self.name)
 
     @property
     def data(self):
@@ -279,6 +295,15 @@ SONJA_LUCK = STANDARD_LUCK - STANDARD_LUCK
 NELL_LUCK = Dist.d(20) - 1
 RACHEL_LUCK = Dist.d(40) - 1
 
+FLAK_LUCK = (Dist.d(25) - 1) - (Dist.d(10) - 1)
+FLAK_COP_LUCK = (Dist.d(50) - 1) - (Dist.d(20) - 1)
+FLAK_SCOP_LUCK = (Dist.d(90) - 1) - (Dist.d(40) - 1)
+
+JUGGER_LUCK = (Dist.d(30) - 1) - (Dist.d(15) - 1)
+JUGGER_COP_LUCK = (Dist.d(55) - 1) - (Dist.d(25) - 1)
+JUGGER_SCOP_LUCK = (Dist.d(95) - 1) - (Dist.d(45) - 1)
+
+
 STANDARD_STATS = lambda unit: (100, 100)
 STANDARD_BOOST = lambda unit: (10, 10)
 TOWERS = 1
@@ -298,6 +323,9 @@ class CommandingOfficer:
         self.stat_override = stat_override or STANDARD_STATS
         self.cop_boost = cop_boost or STANDARD_BOOST
         self.scop_boost = scop_boost or self.cop_boost
+
+    def with_towers(self, towers):
+        return CommandingOfficer(towers, self.luck, self.stat_override, self.cop_boost, self.scop_boost)
 
     def tower_boost(self):
         if self.towers is None:
@@ -322,15 +350,31 @@ class CommandingOfficer:
         _, def_boost = self.power_boost(unit, power, attacker)
         return base_defense + def_boost
 
+    def __call__(self, *args, **kwargs):
+        """ Make vb(tank) syntax delegate to tank(vb) syntax. """
+        co = self
+        if "towers" in kwargs:
+            co = co.with_towers(kwargs["towers"])
+
+        units = [arg for arg in args if isinstance(arg, Unit)]
+        if len(units) > 1:
+            raise Exception("Expected at most one unit arg to CO call operator but got: " + repr(units))
+
+        not_units = [arg for arg in args if not isinstance(arg, Unit)]
+        new_args = [co] + not_units
+        return units[0](*new_args)
+
 
 ATTACKER_POWER = PowerType.no_power
 DEFENDER_POWER = PowerType.no_power
+ATTACKER_CITIES = 0
 
-def set_meta(*args):
+def set_meta(*args, cities=None):
     global TOWERS
     global DTOWERS
     global ATTACKER_POWER
     global DEFENDER_POWER
+    global ATTACKER_CITIES
 
     int_args = [arg for arg in args if  isinstance(arg, int)]
     power_args = [arg for arg in args if  isinstance(arg, PowerType)]
@@ -340,8 +384,12 @@ def set_meta(*args):
 
     ATTACKER_POWER = power_args[0] if power_args else no_power
     DEFENDER_POWER = power_args[1] if len(power_args) > 1 else no_power
+    if cities is not None:
+        ATTACKER_CITIES = cities
 
-    sys.ps1 = str(TOWERS) + str(DTOWERS) + ATTACKER_POWER.char + DEFENDER_POWER.char + ">>> "
+    cities_prompt = "_" + str(ATTACKER_CITIES) if ATTACKER_CITIES else ""
+
+    sys.ps1 = str(TOWERS) + str(DTOWERS) + ATTACKER_POWER.char + DEFENDER_POWER.char + cities_prompt + ">>> "
 
 set_meta(1)
 
@@ -351,6 +399,7 @@ def get_meta():
         "dtowers": DTOWERS,
         "attacker_power": ATTACKER_POWER,
         "defender_power": DEFENDER_POWER,
+        "cities": ATTACKER_CITIES,
     }
 
 
@@ -371,12 +420,18 @@ eagle = CommandingOfficer(
         stat_override=lambda unit: (115, 110) if unit.is_air else ((70, 100) if unit.is_sea else (100, 100)),
         cop_boost=lambda unit: (15, 20) if unit.is_air else (10, 10))
 
+flak_luck = CommandingOfficer(luck=FLAK_LUCK)
+flak_cop_luck = CommandingOfficer(luck=FLAK_COP_LUCK, stat_override=lambda unit: (110, 110))
+flak_scop_luck = CommandingOfficer(luck=FLAK_SCOP_LUCK, stat_override=lambda unit: (110, 110))
+
 grimm = CommandingOfficer(
         stat_override=lambda unit: (130, 80), cop_boost=lambda unit: (30, 10), scop_boost=lambda unit: (60, 10))
 
 grit = CommandingOfficer(
         stat_override=lambda unit: (120, 100) if unit.is_indirect else ((100, 100) if unit.is_infantry else (80, 100)),
         cop_boost=lambda unit: (30, 10) if unit.is_indirect else (10, 10))
+
+hawke = CommandingOfficer(stat_override=lambda unit: (110, 100))
 
 jake = CommandingOfficer(
         stat_override=lambda unit: (110, 100) if unit.terrain == plains else (100, 100),
@@ -394,16 +449,24 @@ jess = CommandingOfficer(
         cop_boost=lambda unit: (20, 10) if unit.is_vehicle else (10, 10),
         scop_boost=lambda unit: (40, 10) if unit.is_vehicle else (10, 10))
 
+jugger_luck = CommandingOfficer(luck=JUGGER_LUCK)
+jugger_cop_luck = CommandingOfficer(luck=JUGGER_COP_LUCK, stat_override=lambda unit: (110, 110))
+jugger_scop_luck = CommandingOfficer(luck=JUGGER_SCOP_LUCK, stat_override=lambda unit: (110, 110))
+
 # TODO: kanbei scop counterattacks
 kanbei = CommandingOfficer(
         stat_override=lambda unit: (130, 130),
         cop_boost=lambda unit: (20, 10),
         scop_boost=lambda unit: (20, 30))
 
+def kindle_scop(unit):
+    a, d = (140, 10) if unit.terrain.type.is_urban else (10, 10)
+    cities_boost = ATTACKER_CITIES * 3
+    return (a + cities_boost, d)
 kindle = CommandingOfficer(
         stat_override=lambda unit: (140, 100) if unit.terrain.type.is_urban else (100, 100),
         cop_boost=lambda unit: (50, 10) if unit.terrain.type.is_urban else (10, 10),
-        scop_boost=lambda unit: unimplemented("kindle scop not implemented"))
+        scop_boost=kindle_scop)
 
 koal = CommandingOfficer(
         stat_override=lambda unit: (110, 100) if unit.terrain == road else (100, 100),
@@ -471,6 +534,11 @@ class Unit:
                 + ", " + str(self.terrain.type.name)
                 + ", " + repr(self.raw_hp) + ">")
 
+    def short_repr(self):
+        terrain = str(self.terrain.type.name) + ", " if self.terrain.type != TerrainType.shoal else ""
+        hp = str(self.displayed_hp[0])
+        return str(self.data.type.short_name) + "(" + terrain + hp + ")"
+
     is_air = property(lambda self: self.type.is_air)
     is_sea = property(lambda self: self.type.is_sea)
     is_infantry = property(lambda self: self.type.is_infantry)
@@ -482,6 +550,10 @@ class Unit:
     def with_hp(self, new_hp):
         if isinstance(new_hp, int):
             new_hp = Dist.exactly(new_hp * 10)
+        elif isinstance(new_hp, Dist):
+            pass
+        else:
+            new_hp = Dist.exactly(int(new_hp))
         return Unit(self.data, self.co, self.power, self.terrain, new_hp)
 
     def add_hp(self, addition):
@@ -536,7 +608,7 @@ class Unit:
 
     def defense_rating(self, attacker=None):
         co_defense = self.co.defense_for(self, (self.power or DEFENDER_POWER), attacker)
-        terrain_defense = self.displayed_hp.scale(self.terrain.defense)
+        terrain_defense = Dist.exactly(0) if self.is_air else self.displayed_hp.scale(self.terrain.defense)
         total_defense = co_defense + terrain_defense
         debug_log("total defense:", total_defense)
         return total_defense
@@ -573,6 +645,9 @@ class Unit:
             return self
         other, *remaining = args
 
+        if isinstance(other, int):
+            return self.truncate_hp(other).attack_with(*remaining)
+
         total_new_raw_hp = Dist([])
         for displayed_hp, chance in self.displayed_hp.normalize()._buckets:
             partial_self = self.truncate_hp(displayed_hp)
@@ -585,6 +660,22 @@ class Unit:
 
         return self.with_hp(total_new_raw_hp).attack_with(*remaining)
     attack_With = attack_with
+
+    def find_best_attack(self, *args):
+        attackers = list(args)
+        results = []
+        for perm in permutations(attackers):
+            perm_attackers = list(perm)
+            result = self.attack_with(*perm_attackers)
+            result_hp = result.displayed_hp.clamp(range(10))
+            results.append((perm_attackers, result_hp))
+        for perm_attackers, result_hp in sorted(results, key=lambda p: (p[1]._buckets[0][0], -p[1]._buckets[0][1])):
+            print(format_attackers(perm_attackers) + ": " + repr(result_hp))
+    best_attack_with = find_best_attack
+    find_attack_with = find_best_attack
+
+def format_attackers(attackers):
+    return "[" + ", ".join(attacker.short_repr() for attacker in attackers) + "]"
 
 
 def pretty_print(units):
